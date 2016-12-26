@@ -11,7 +11,7 @@ Machine Learning, Recommendation Systems
 ## Institute of Computing Technology, Chinese Academy of Sciences
 Computer Science, Master, 2013/09-2016/06
 ## University of Electronic Science And Technology of China
-Software Engineering, Bacheloer, 2009/09-2013/06
+Software Engineering, Bachelor, 2009/09-2013/06
  
 # Contact
 [github](https://github.com/chengqiangboy)

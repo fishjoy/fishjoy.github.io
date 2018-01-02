@@ -1,0 +1,5 @@
+http://chengqiangboy.github.io/2017/09/25/god-s-probable-game/
+http://chengqiangboy.github.io/2017/09/15/word2vec-in-background/
+http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/
+http://chengqiangboy.github.io/2016/10/31/graphx/
+http://chengqiangboy.github.io/2016/10/06/flume-introduce/

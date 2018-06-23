@@ -88,7 +88,7 @@ nofollow:
 
 baidu_url_submit:
   count: 5
-  host: www.sparkwater.cn
+  host: chengqiangboy.github.io
   token: 0TnLSale2A3gA1nz
   path: baidu_urls.txt ## 文本文档的地址， 新链接会保存在此文本文档里
 

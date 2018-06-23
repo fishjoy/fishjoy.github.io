@@ -8,6 +8,6 @@ Disallow: /css/
 Disallow: /fonts/
 Disallow: /vendors/
 Disallow: /fancybox/
-Sitemap: http://www.sparkwater.com/search.xml
-Sitemap: http://www.sparkwater.com/sitemap.xml
-Sitemap: http://www.sparkwater.com/baidusitemap.xml
+Sitemap: https://chengqiangboy.github.io/search.xml
+Sitemap: https://chengqiangboy.github.io/sitemap.xml
+Sitemap: https://chengqiangboy.github.io/baidusitemap.xml

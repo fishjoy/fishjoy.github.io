@@ -68,7 +68,7 @@
 <link href="/css/main.css?v=5.1.0" rel="stylesheet" type="text/css">
 
 
-  <meta name="keywords" content="spark,graphx,">
+  <meta name="keywords" content="调优,spark,MLlib,">
 
 
 
@@ -86,16 +86,18 @@
 
 
 
-<meta name="description" content="Graphx的实现代码并不多，这得益于Spark RDD niubility的设计。众所周知，在分布式上做图计算需要考虑点、边的切割。而RDD本身是一个分布式的数据集，所以，做Graphx只需要把边和点用RDD表示出来就可以了。本文就是从这个角度来分析Graphx的运作基本原理（本文基于Spark2.0）。">
+<meta name="description" content="背景介绍我们的系统有一小部分机器学习模型识别需求，因为种种原因，最终选用了Spark MLlib来进行训练和预测。MLlib的Pipeline设计很好地契合了一个机器学习流水线，在模型训练和效果验证阶段，pipeline可以简化开发流程，然而在预测阶段，MLlib pipeline的表现有点差强人意。">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Graphx 源码剖析-图的生成">
-<meta property="og:url" content="http://chengqiangboy.github.io/2016/10/31/graphx/index.html">
+<meta property="og:title" content="让Spark MLlib的预测性能再飞一会儿">
+<meta property="og:url" content="http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/index.html">
 <meta property="og:site_name" content="Albert Cheng's blog">
-<meta property="og:description" content="Graphx的实现代码并不多，这得益于Spark RDD niubility的设计。众所周知，在分布式上做图计算需要考虑点、边的切割。而RDD本身是一个分布式的数据集，所以，做Graphx只需要把边和点用RDD表示出来就可以了。本文就是从这个角度来分析Graphx的运作基本原理（本文基于Spark2.0）。">
-<meta property="og:updated_time" content="2018-01-02T06:26:52.033Z">
+<meta property="og:description" content="背景介绍我们的系统有一小部分机器学习模型识别需求，因为种种原因，最终选用了Spark MLlib来进行训练和预测。MLlib的Pipeline设计很好地契合了一个机器学习流水线，在模型训练和效果验证阶段，pipeline可以简化开发流程，然而在预测阶段，MLlib pipeline的表现有点差强人意。">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/2838375-267b2ad4c04beade.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:updated_time" content="2018-06-23T09:25:26.357Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Graphx 源码剖析-图的生成">
-<meta name="twitter:description" content="Graphx的实现代码并不多，这得益于Spark RDD niubility的设计。众所周知，在分布式上做图计算需要考虑点、边的切割。而RDD本身是一个分布式的数据集，所以，做Graphx只需要把边和点用RDD表示出来就可以了。本文就是从这个角度来分析Graphx的运作基本原理（本文基于Spark2.0）。">
+<meta name="twitter:title" content="让Spark MLlib的预测性能再飞一会儿">
+<meta name="twitter:description" content="背景介绍我们的系统有一小部分机器学习模型识别需求，因为种种原因，最终选用了Spark MLlib来进行训练和预测。MLlib的Pipeline设计很好地契合了一个机器学习流水线，在模型训练和效果验证阶段，pipeline可以简化开发流程，然而在预测阶段，MLlib pipeline的表现有点差强人意。">
+<meta name="twitter:image" content="https://upload-images.jianshu.io/upload_images/2838375-267b2ad4c04beade.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
 
 
 
@@ -123,13 +125,13 @@
 
 
 
-  <link rel="canonical" href="http://chengqiangboy.github.io/2016/10/31/graphx/">
+  <link rel="canonical" href="http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/">
 
 
 
 
 
-  <title> Graphx 源码剖析-图的生成 | Albert Cheng's blog </title>
+  <title> 让Spark MLlib的预测性能再飞一会儿 | Albert Cheng's blog </title>
 </head>
 
 <body itemscope="" itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -293,7 +295,7 @@
   
 
   <article class="post post-type-normal " itemscope="" itemtype="http://schema.org/Article">
-  <link itemprop="mainEntityOfPage" href="http://chengqiangboy.github.io/2016/10/31/graphx/">
+  <link itemprop="mainEntityOfPage" href="http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/">
 
   <span style="display:none" itemprop="author" itemscope="" itemtype="http://schema.org/Person">
     <meta itemprop="name" content="Albert Cheng">
@@ -317,7 +319,7 @@
             
             
               
-                Graphx 源码剖析-图的生成
+                让Spark MLlib的预测性能再飞一会儿
               
             
           </h1>
@@ -330,8 +332,8 @@
                 <i class="fa fa-calendar-o"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2016-10-31T23:34:52+08:00">
-                2016-10-31
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-05-02T17:14:21+08:00">
+                2018-05-02
               </time>
             
 
@@ -364,8 +366,8 @@
             
               <span class="post-comments-count">
                 <span class="post-meta-divider">|</span>
-                <a href="/2016/10/31/graphx/#comments" itemprop="discussionUrl">
-                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/10/31/graphx/" itemprop="commentCount"></span>
+                <a href="/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2018/05/02/让Spark-MLlib的预测性能再飞一会儿/" itemprop="commentCount"></span>
                 </a>
               </span>
             
@@ -375,7 +377,7 @@
 
           
           
-             <span id="/2016/10/31/graphx/" class="leancloud_visitors" data-flag-title="Graphx 源码剖析-图的生成">
+             <span id="/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/" class="leancloud_visitors" data-flag-title="让Spark MLlib的预测性能再飞一会儿">
                <span class="post-meta-divider">|</span>
                <span class="post-meta-item-icon">
                  <i class="fa fa-eye"></i>
@@ -400,19 +402,24 @@
       
 
       
-        <p>Graphx的实现代码并不多，这得益于Spark RDD niubility的设计。众所周知，在分布式上做图计算需要考虑点、边的切割。而RDD本身是一个分布式的数据集，所以，做Graphx只需要把边和点用RDD表示出来就可以了。本文就是从这个角度来分析Graphx的运作基本原理（本文基于Spark2.0）。<br><a id="more"></a></p>
-<h1 id="分布式图的切割方式"><a href="#分布式图的切割方式" class="headerlink" title="分布式图的切割方式"></a>分布式图的切割方式</h1><p>在单机上图很好表示，在分布式环境下，就涉及到一个问题：图如何切分，以及切分之后的不同子图如何保持彼此的联系构成一个完整的图。图的切分方式有两种：点切分和边切分。在Graphx中，采用点切分。</p>
-<p>在GraphX中，<code>Graph</code>类除了表示点的<code>VertexRDD</code>和表示边的<code>EdgeRDD</code>外，还有一个将点的属性和边的属性都包含在内的<code>RDD[EdgeTriplet]</code>。<br>方便起见，我们先从<code>GraphLoader</code>中来看看如何从一个用边来描述图的文件中如何构建<code>Graph</code>的。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line">def edgeListFile(</div><div class="line">      sc: SparkContext,</div><div class="line">      path: String,</div><div class="line">      canonicalOrientation: Boolean = false,</div><div class="line">      numEdgePartitions: Int = -1,</div><div class="line">      edgeStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY,</div><div class="line">      vertexStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY)</div><div class="line">    : Graph[Int, Int] =</div><div class="line">  &#123;</div><div class="line"></div><div class="line">    // Parse the edge data table directly into edge partitions</div><div class="line">    val lines = ... ...</div><div class="line">    val edges = lines.mapPartitionsWithIndex &#123; (pid, iter) =&gt;</div><div class="line">      ... ...</div><div class="line">      Iterator((pid, builder.toEdgePartition))</div><div class="line">    &#125;.persist(edgeStorageLevel).setName(&quot;GraphLoader.edgeListFile - edges (%s)&quot;.format(path))</div><div class="line">    edges.count()</div><div class="line"></div><div class="line">    GraphImpl.fromEdgePartitions(edges, defaultVertexAttr = 1, edgeStorageLevel = edgeStorageLevel,</div><div class="line">      vertexStorageLevel = vertexStorageLevel)</div><div class="line">  &#125; // end of edgeListFile</div></pre></td></tr></table></figure></p>
-<p>从上面精简的代码中可以看出来，先得到<code>lines</code>一个表示边的RDD（这里所谓的边依旧是文本描述的）,然后再经过一系列的转换来生成Graph。</p>
-<h1 id="EdgeRDD"><a href="#EdgeRDD" class="headerlink" title="EdgeRDD"></a>EdgeRDD</h1><p><code>GraphImpl.fromEdgePartitions</code>中传入的第一个参数<code>edges</code>为<code>EdgeRDD</code>的<code>EdgePartition</code>。先来看看<code>EdgePartition</code>究竟为何物。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">class EdgePartition[</div><div class="line">    @specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED: ClassTag, VD: ClassTag](</div><div class="line">    localSrcIds: Array[Int],</div><div class="line">    localDstIds: Array[Int],</div><div class="line">    data: Array[ED],</div><div class="line">    index: GraphXPrimitiveKeyOpenHashMap[VertexId, Int],</div><div class="line">    global2local: GraphXPrimitiveKeyOpenHashMap[VertexId, Int],</div><div class="line">    local2global: Array[VertexId],</div><div class="line">    vertexAttrs: Array[VD],</div><div class="line">    activeSet: Option[VertexSet])</div><div class="line">  extends Serializable &#123;</div></pre></td></tr></table></figure></p>
-<p>其中：<br><code>localSrcIds</code> 为本地边的源点的本地编号。<br><code>localDstIds</code> 为本地边的目的点的本地编号，与<code>localSrcIds</code>一一对应成边的两个点。<br><code>data</code> 为边的属性值。<br><code>index</code> 为本地边的源点全局ID到localSrcIds中下标的映射。<br><code>global2local</code> 为点的全局ID到本地ID的映射。<br><code>local2global</code> 是一个Vector，依次存储了本地出现的点，包括跨节点的点。<br>通过这样的方式做到了点切割。<br>有了<code>EdgePartition</code>之后，再通过得到<code>EdgeRDD</code>就容易了。</p>
-<h1 id="VertexRDD"><a href="#VertexRDD" class="headerlink" title="VertexRDD"></a>VertexRDD</h1><p>现在看<code>fromEdgePartitions</code><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">def fromEdgePartitions[VD: ClassTag, ED: ClassTag](</div><div class="line">    edgePartitions: RDD[(PartitionID, EdgePartition[ED, VD])],</div><div class="line">    defaultVertexAttr: VD,</div><div class="line">    edgeStorageLevel: StorageLevel,</div><div class="line">    vertexStorageLevel: StorageLevel): GraphImpl[VD, ED] = &#123;</div><div class="line">  fromEdgeRDD(EdgeRDD.fromEdgePartitions(edgePartitions), defaultVertexAttr, edgeStorageLevel,</div><div class="line">    vertexStorageLevel)</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
-<p><code>fromEdgePartitions</code> 中调用了 <code>fromEdgeRDD</code><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">private def fromEdgeRDD[VD: ClassTag, ED: ClassTag](</div><div class="line">    edges: EdgeRDDImpl[ED, VD],</div><div class="line">    defaultVertexAttr: VD,</div><div class="line">    edgeStorageLevel: StorageLevel,</div><div class="line">    vertexStorageLevel: StorageLevel): GraphImpl[VD, ED] = &#123;</div><div class="line">  val edgesCached = edges.withTargetStorageLevel(edgeStorageLevel).cache()</div><div class="line">  val vertices =</div><div class="line">    VertexRDD.fromEdges(edgesCached, edgesCached.partitions.length, defaultVertexAttr)</div><div class="line">    .withTargetStorageLevel(vertexStorageLevel)</div><div class="line">  fromExistingRDDs(vertices, edgesCached)</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
-<p>可见，<code>VertexRDD</code>是由<code>EdgeRDD</code>生成的。接下来讲解怎么从<code>EdgeRDD</code>生成<code>VertexRDD</code>。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line">def fromEdges[VD: ClassTag](</div><div class="line">      edges: EdgeRDD[_], numPartitions: Int, defaultVal: VD): VertexRDD[VD] = &#123;</div><div class="line">    val routingTables = createRoutingTables(edges, new HashPartitioner(numPartitions))</div><div class="line">    val vertexPartitions = routingTables.mapPartitions(&#123; routingTableIter =&gt;</div><div class="line">      val routingTable =</div><div class="line">        if (routingTableIter.hasNext) routingTableIter.next() else RoutingTablePartition.empty</div><div class="line">      Iterator(ShippableVertexPartition(Iterator.empty, routingTable, defaultVal))</div><div class="line">    &#125;, preservesPartitioning = true)</div><div class="line">    new VertexRDDImpl(vertexPartitions)</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  private[graphx] def createRoutingTables(</div><div class="line">      edges: EdgeRDD[_], vertexPartitioner: Partitioner): RDD[RoutingTablePartition] = &#123;</div><div class="line">    // Determine which vertices each edge partition needs by creating a mapping from vid to pid.</div><div class="line">    val vid2pid = edges.partitionsRDD.mapPartitions(_.flatMap(</div><div class="line">      Function.tupled(RoutingTablePartition.edgePartitionToMsgs)))</div><div class="line">      .setName(&quot;VertexRDD.createRoutingTables - vid2pid (aggregation)&quot;)</div><div class="line"></div><div class="line">    val numEdgePartitions = edges.partitions.length</div><div class="line">    vid2pid.partitionBy(vertexPartitioner).mapPartitions(</div><div class="line">      iter =&gt; Iterator(RoutingTablePartition.fromMsgs(numEdgePartitions, iter)),</div><div class="line">      preservesPartitioning = true)</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
-<p>从代码中可以看到先创建了一个路由表，这个路由表的本质依旧是RDD，然后通过路由表的转得到<code>RDD[ShippableVertexPartition]</code>，最后再构造出<code>VertexRDD</code>。先讲解一下路由表，每一条边都有两个点，一个源点，一个终点。在构造路由表时，源点标记位或1，目标点标记位或2，并结合边的partitionID编码成一个Int（高2位表示源点终点，低30位表示边的partitionID）。再根据这个编码的Int反解出<code>ShippableVertexPartition</code>。值得注意的是，在<code>createRoutingTables</code>中，反解生成<code>ShippableVertexPartition</code>过程中根据点的id hash值partition了一次，这样，相同的点都在一个分区了。有意思的地方来了：我以为这样之后就会把点和这个点的镜像合成一个，然而实际上并没有。点和边是相互关联的，通过边生成点，通过点能找到边，如果合并了点和点的镜像，那也找不到某些边了。<code>ShippableVertexPartition</code>依旧以边的区分为标准，并记录了点的属性值，源点、终点信息，这样边和边的点，都在一个分区上。<br>最终，通过<code>new VertexRDDImpl(vertexPartitions)</code>生成<code>VertexRDD</code>。</p>
-<h1 id="Graph"><a href="#Graph" class="headerlink" title="Graph"></a>Graph</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">def fromExistingRDDs[VD: ClassTag, ED: ClassTag](</div><div class="line">     vertices: VertexRDD[VD],</div><div class="line">     edges: EdgeRDD[ED]): GraphImpl[VD, ED] = &#123;</div><div class="line">   new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))</div><div class="line"> &#125;</div></pre></td></tr></table></figure>
-<p>在<code>fromExistingRDDs</code>调用<code>new GraphImpl(vertices, new ReplicatedVertexView(edges.asInstanceOf[EdgeRDDImpl[ED, VD]]))</code>来生成图。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](</div><div class="line">    var edges: EdgeRDDImpl[ED, VD],</div><div class="line">    var hasSrcId: Boolean = false,</div><div class="line">    var hasDstId: Boolean = false)</div></pre></td></tr></table></figure></p>
-<p><code>ReplicatedVertexView</code>是边和图的视图，当点的属性发生改变时，将改变传输到对应的边。</p>
+        <h1 id="背景介绍"><a href="#背景介绍" class="headerlink" title="背景介绍"></a>背景介绍</h1><p>我们的系统有一小部分机器学习模型识别需求，因为种种原因，最终选用了Spark MLlib来进行训练和预测。MLlib的Pipeline设计很好地契合了一个机器学习流水线，在模型训练和效果验证阶段，pipeline可以简化开发流程，然而在预测阶段，MLlib pipeline的表现有点差强人意。</p>
+<a id="more"></a>
+<h1 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h1><p>某个模型的输入为一个字符串，假设长度为N，在我们的场景里面这个N一般不会大于10。特征也很简单，对于每一个输入，可以在O(N)的时间计算出特征向量，分类器选用的是随机森林。<br>对于这样的预测任务，直观上感觉应该非常快，初步估计10ms以内出结果。但是通MLlib pipeline的transform预测结果预测时，性能在86ms左右(2000条query平均响应时间)。而且，query和query之间在输入相同的情况下，也存在响应时间波动的问题。</p>
+<h1 id="预测性能优化"><a href="#预测性能优化" class="headerlink" title="预测性能优化"></a>预测性能优化</h1><p>先说说响应时间波动的问题，每一条query的输入都是一样的，也就排除了特征加工时的计算量波动的问题，因为整个计算中消耗内存极少，且测试时内存足够，因为也排除gc导致预测性能抖动的问题。那么剩下的只有Spark了，Spark可能在做某些事情导致了预测性能抖动。通过查看log信息，可以印证这个观点。<br><img src="https://upload-images.jianshu.io/upload_images/2838375-267b2ad4c04beade.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="log"><br>从日志中截取了一小段，里面有大量的清理broadcast变量信息。这也为后续性能优化提供了一个方向。（下面会有部分MLlib源码，源码基于Spark2.3）</p>
+<p>在MLlib中，是调用PipelineModel的transform方法进行预测，该方法会调用pipeline的每一个stage内的Transformer的transform方法来对输入的DataFrame/DataSet进行转换。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">@Since(&quot;2.0.0&quot;)</div><div class="line">  override def transform(dataset: Dataset[_]): DataFrame = &#123;</div><div class="line">    transformSchema(dataset.schema, logging = true)</div><div class="line">    stages.foldLeft(dataset.toDF)((cur, transformer) =&gt; transformer.transform(cur))</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
+<p>下面，我们先看看训练好的随机森林模型(RandomForestClassificationModel)在预测时做了些什么吧<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">override protected def transformImpl(dataset: Dataset[_]): DataFrame = &#123;</div><div class="line">    val bcastModel = dataset.sparkSession.sparkContext.broadcast(this)</div><div class="line">    val predictUDF = udf &#123; (features: Any) =&gt;</div><div class="line">      bcastModel.value.predict(features.asInstanceOf[Vector])</div><div class="line">    &#125;</div><div class="line">    dataset.withColumn($(predictionCol), predictUDF(col($(featuresCol))))</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
+<p>重点来了，终于找到前面说的broadcast的’罪魁祸’了，每次预测时，MLlib都会把模型广播到集群。这样做的好处是方便批处理，但对于小计算量，压根不需要集群的预测场景这样的做法就有点浪费资源了：</p>
+<ol>
+<li>每次预测都广播显然太多余。</li>
+<li>因为每次都广播，所以之前的广播变量也会逐渐回收，在回收时，又反过来影响预测的性能。<h2 id="解决办法"><a href="#解决办法" class="headerlink" title="解决办法"></a>解决办法</h2>从上述代码中可以看到，RandomForestClassificationModel 预测最根本的地方是在于调用predict方法，输入是一个Vector。看看predict干了什么<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">override protected def predict(features: FeaturesType): Double = &#123;</div><div class="line">    raw2prediction(predictRaw(features))</div><div class="line">  &#125;</div></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>predict分为两步走:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line">override protected def predictRaw(features: Vector): Vector = &#123;</div><div class="line">    // TODO: When we add a generic Bagging class, handle transform there: SPARK-7128</div><div class="line">    // Classifies using majority votes.</div><div class="line">    // Ignore the tree weights since all are 1.0 for now.</div><div class="line">    val votes = Array.fill[Double](numClasses)(0.0)</div><div class="line">    _trees.view.foreach &#123; tree =&gt;</div><div class="line">      val classCounts: Array[Double] = tree.rootNode.predictImpl(features).impurityStats.stats</div><div class="line">      val total = classCounts.sum</div><div class="line">      if (total != 0) &#123;</div><div class="line">        var i = 0</div><div class="line">        while (i &lt; numClasses) &#123;</div><div class="line">          votes(i) += classCounts(i) / total</div><div class="line">          i += 1</div><div class="line">        &#125;</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">    Vectors.dense(votes)</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  override protected def raw2probabilityInPlace(rawPrediction: Vector): Vector = &#123;</div><div class="line">    rawPrediction match &#123;</div><div class="line">      case dv: DenseVector =&gt;</div><div class="line">        ProbabilisticClassificationModel.normalizeToProbabilitiesInPlace(dv)</div><div class="line">        dv</div><div class="line">      case sv: SparseVector =&gt;</div><div class="line">        throw new RuntimeException(&quot;Unexpected error in RandomForestClassificationModel:&quot; +</div><div class="line">          &quot; raw2probabilityInPlace encountered SparseVector&quot;)</div><div class="line">    &#125;</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
+<p>这两个方法的输入和输出均为vector，那么我们如果把这两个方法反射出来直接用在预测的特征向量上是不是就可以了？答案是肯定的。<br>注意其中的<code>raw2probability</code>在Spark2.3中的RandomForestClassificationModel中，签名变为了<code>raw2probabilityInPlace</code></p>
+<h2 id="全面绕开pipeline"><a href="#全面绕开pipeline" class="headerlink" title="全面绕开pipeline"></a>全面绕开pipeline</h2><p>前面解决了分类器预测的性能问题，另外一个问题就来了。输入的特征向量怎么来呢？在一个MLlib Pipeline流程中，分类器预测只是最后一步，前面还有多种多样的特征加工节点。我尝试了将一个pipeline拆解成两个，一个用于特征加工，一个用于分类预测。用第一个pipeline加工特征，只绕开第二个，性能显然是提升了，但还没达到预期效果。于是，我有了另外一个想法：全面绕开pipeline，对pipeline的每一步，都避免调用原生transform接口。这样的弊端就是，必须重写pipeline的每一步预测方法，然后人肉还原pipeline的预测流程。流程大致跟上面类似。<br>例如：OneHot(说句题外话，这东西在Spark2.3之前的版本是有bug的，详情参考官方文档)。<br>OneHotEncoderModel的transform方法如下:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line">@Since(&quot;2.3.0&quot;)</div><div class="line">  override def transform(dataset: Dataset[_]): DataFrame = &#123;</div><div class="line">    val transformedSchema = transformSchema(dataset.schema, logging = true)</div><div class="line">    val keepInvalid = $(handleInvalid) == OneHotEncoderEstimator.KEEP_INVALID</div><div class="line"></div><div class="line">    val encodedColumns = $(inputCols).indices.map &#123; idx =&gt;</div><div class="line">      val inputColName = $(inputCols)(idx)</div><div class="line">      val outputColName = $(outputCols)(idx)</div><div class="line"></div><div class="line">      val outputAttrGroupFromSchema =</div><div class="line">        AttributeGroup.fromStructField(transformedSchema(outputColName))</div><div class="line"></div><div class="line">      val metadata = if (outputAttrGroupFromSchema.size &lt; 0) &#123;</div><div class="line">        OneHotEncoderCommon.createAttrGroupForAttrNames(outputColName,</div><div class="line">          categorySizes(idx), $(dropLast), keepInvalid).toMetadata()</div><div class="line">      &#125; else &#123;</div><div class="line">        outputAttrGroupFromSchema.toMetadata()</div><div class="line">      &#125;</div><div class="line"></div><div class="line">      encoder(col(inputColName).cast(DoubleType), lit(idx))</div><div class="line">        .as(outputColName, metadata)</div><div class="line">    &#125;</div><div class="line">    dataset.withColumns($(outputCols), encodedColumns)</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
+<p>里面对feature进行转换的关键代码行是 encoder…<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line">private def encoder: UserDefinedFunction = &#123;</div><div class="line">    val keepInvalid = getHandleInvalid == OneHotEncoderEstimator.KEEP_INVALID</div><div class="line">    val configedSizes = getConfigedCategorySizes</div><div class="line">    val localCategorySizes = categorySizes</div><div class="line"></div><div class="line">    // The udf performed on input data. The first parameter is the input value. The second</div><div class="line">    // parameter is the index in inputCols of the column being encoded.</div><div class="line">    udf &#123; (label: Double, colIdx: Int) =&gt;</div><div class="line">      val origCategorySize = localCategorySizes(colIdx)</div><div class="line">      // idx: index in vector of the single 1-valued element</div><div class="line">      val idx = if (label &gt;= 0 &amp;&amp; label &lt; origCategorySize) &#123;</div><div class="line">        label</div><div class="line">      &#125; else &#123;</div><div class="line">        if (keepInvalid) &#123;</div><div class="line">          origCategorySize</div><div class="line">        &#125; else &#123;</div><div class="line">          if (label &lt; 0) &#123;</div><div class="line">            throw new SparkException(s&quot;Negative value: $label. Input can&apos;t be negative. &quot; +</div><div class="line">              s&quot;To handle invalid values, set Param handleInvalid to &quot; +</div><div class="line">              s&quot;$&#123;OneHotEncoderEstimator.KEEP_INVALID&#125;&quot;)</div><div class="line">          &#125; else &#123;</div><div class="line">            throw new SparkException(s&quot;Unseen value: $label. To handle unseen values, &quot; +</div><div class="line">              s&quot;set Param handleInvalid to $&#123;OneHotEncoderEstimator.KEEP_INVALID&#125;.&quot;)</div><div class="line">          &#125;</div><div class="line">        &#125;</div><div class="line">      &#125;</div><div class="line"></div><div class="line">      val size = configedSizes(colIdx)</div><div class="line">      if (idx &lt; size) &#123;</div><div class="line">        Vectors.sparse(size, Array(idx.toInt), Array(1.0))</div><div class="line">      &#125; else &#123;</div><div class="line">        Vectors.sparse(size, Array.empty[Int], Array.empty[Double])</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">  &#125;</div></pre></td></tr></table></figure></p>
+<p>encoder里面关键的是这个udf，将其抠出重写之后直接作用于特征向量。</p>
+<h2 id="效果"><a href="#效果" class="headerlink" title="效果"></a>效果</h2><p>经过测试，全面绕开pipeline之后，响应时间下降到16ms左右。(2000条query平均响应时间)，且不再有抖动。</p>
 
       
     </div>
@@ -436,9 +443,11 @@
       
         <div class="post-tags">
           
+            <a href="/tags/调优/" rel="tag"># 调优</a>
+          
             <a href="/tags/spark/" rel="tag"># spark</a>
           
-            <a href="/tags/graphx/" rel="tag"># graphx</a>
+            <a href="/tags/MLlib/" rel="tag"># MLlib</a>
           
         </div>
       
@@ -447,8 +456,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2016/10/06/flume-introduce/" rel="next" title="Flume介绍">
-                <i class="fa fa-chevron-left"></i> Flume介绍
+              <a href="/2017/09/25/god-s-probable-game/" rel="next" title="上帝的骰子游戏">
+                <i class="fa fa-chevron-left"></i> 上帝的骰子游戏
               </a>
             
           </div>
@@ -456,10 +465,6 @@
           <span class="post-nav-divider"></span>
 
           <div class="post-nav-prev post-nav-item">
-            
-              <a href="/2016/11/11/a-dif-between-scala-and-java/" rel="prev" title="变参调用：scala和java的一个不同点">
-                变参调用：scala和java的一个不同点 <i class="fa fa-chevron-right"></i>
-              </a>
             
           </div>
         </div>
@@ -485,7 +490,7 @@
           
   <div class="comments" id="comments">
     
-      <div class="ds-thread" data-thread-key="2016/10/31/graphx/" data-title="Graphx 源码剖析-图的生成" data-url="http://chengqiangboy.github.io/2016/10/31/graphx/">
+      <div class="ds-thread" data-thread-key="2018/05/02/让Spark-MLlib的预测性能再飞一会儿/" data-title="让Spark MLlib的预测性能再飞一会儿" data-url="http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/">
       </div>
     
   </div>
@@ -634,7 +639,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#分布式图的切割方式"><span class="nav-number">1.</span> <span class="nav-text">分布式图的切割方式</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#EdgeRDD"><span class="nav-number">2.</span> <span class="nav-text">EdgeRDD</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#VertexRDD"><span class="nav-number">3.</span> <span class="nav-text">VertexRDD</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Graph"><span class="nav-number">4.</span> <span class="nav-text">Graph</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#背景介绍"><span class="nav-number">1.</span> <span class="nav-text">背景介绍</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#问题描述"><span class="nav-number">2.</span> <span class="nav-text">问题描述</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#预测性能优化"><span class="nav-number">3.</span> <span class="nav-text">预测性能优化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#解决办法"><span class="nav-number">3.1.</span> <span class="nav-text">解决办法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#全面绕开pipeline"><span class="nav-number">3.2.</span> <span class="nav-text">全面绕开pipeline</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#效果"><span class="nav-number">3.3.</span> <span class="nav-text">效果</span></a></li></ol></li></ol></div>
             
 
           </div>

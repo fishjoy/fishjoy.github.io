@@ -2,9 +2,23 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://chengqiangboy.github.io/2018/05/02/%E8%AE%A9Spark-MLlib%E7%9A%84%E9%A2%84%E6%B5%8B%E6%80%A7%E8%83%BD%E5%86%8D%E9%A3%9E%E4%B8%80%E4%BC%9A%E5%84%BF/</loc>
+    
+    <lastmod>2018-06-23T09:25:26.357Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>http://chengqiangboy.github.io/tags/index.html</loc>
     
     <lastmod>2018-01-02T06:26:52.044Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://chengqiangboy.github.io/categories/index.html</loc>
+    
+    <lastmod>2018-01-02T06:26:52.034Z</lastmod>
     
   </url>
   
@@ -23,14 +37,14 @@
   </url>
   
   <url>
-    <loc>http://chengqiangboy.github.io/categories/index.html</loc>
+    <loc>http://chengqiangboy.github.io/2016/10/06/flume-introduce/</loc>
     
-    <lastmod>2018-01-02T06:26:52.034Z</lastmod>
+    <lastmod>2018-01-02T06:26:52.033Z</lastmod>
     
   </url>
   
   <url>
-    <loc>http://chengqiangboy.github.io/2016/10/06/flume-introduce/</loc>
+    <loc>http://chengqiangboy.github.io/2016/09/21/spark-off_heap/</loc>
     
     <lastmod>2018-01-02T06:26:52.033Z</lastmod>
     
@@ -51,21 +65,14 @@
   </url>
   
   <url>
-    <loc>http://chengqiangboy.github.io/2016/09/21/spark-off_heap/</loc>
-    
-    <lastmod>2018-01-02T06:26:52.033Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://chengqiangboy.github.io/2016/08/24/a-bug-in-streaming-app/</loc>
+    <loc>http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/</loc>
     
     <lastmod>2018-01-02T06:26:52.032Z</lastmod>
     
   </url>
   
   <url>
-    <loc>http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/</loc>
+    <loc>http://chengqiangboy.github.io/2016/08/24/a-bug-in-streaming-app/</loc>
     
     <lastmod>2018-01-02T06:26:52.032Z</lastmod>
     

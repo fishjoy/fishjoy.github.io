@@ -1,5 +1,5 @@
+http://chengqiangboy.github.io/2018/11/30/让关系型数据库查询再飞一会儿/
 http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/
 http://chengqiangboy.github.io/2017/09/25/god-s-probable-game/
 http://chengqiangboy.github.io/2017/09/15/word2vec-in-background/
 http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/
-http://chengqiangboy.github.io/2016/10/31/graphx/

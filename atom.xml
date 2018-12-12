@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://chengqiangboy.github.io/"/>
-  <updated>2018-06-23T09:25:26.357Z</updated>
+  <updated>2018-12-12T11:42:09.734Z</updated>
   <id>http://chengqiangboy.github.io/</id>
   
   <author>
@@ -16,11 +16,41 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>让关系型数据库查询再飞一会儿</title>
+    <link href="http://chengqiangboy.github.io/2018/11/30/%E8%AE%A9%E5%85%B3%E7%B3%BB%E5%9E%8B%E6%95%B0%E6%8D%AE%E5%BA%93%E6%9F%A5%E8%AF%A2%E5%86%8D%E9%A3%9E%E4%B8%80%E4%BC%9A%E5%84%BF/"/>
+    <id>http://chengqiangboy.github.io/2018/11/30/让关系型数据库查询再飞一会儿/</id>
+    <published>2018-11-30T11:39:21.000Z</published>
+    <updated>2018-12-12T11:42:09.734Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>有一个系统的业务正在膨胀中，某一些报表（报表数据在mysql中）数据量增长比较厉害，报表页面已经处于<code>卡爆了</code>的状态。中间经过mysql本身的优化，已经到了当前系统架构+存储模型的瓶颈。本文提供一种优化思路，抛砖引玉。<br><a id="more"></a></p>
+<h1 id="任务分析"><a href="#任务分析" class="headerlink" title="任务分析"></a>任务分析</h1><p>以一条sql的优化为例（这条sql里面的字段随便改了改，不保证正确性）。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">SELECT d.col, COUNT(DISTINCT risk.inst_id) AS `count`</div><div class="line">FROM risk</div><div class="line">	INNER JOIN d</div><div class="line">	ON d.inst_id = risk.inst_id</div><div class="line">		AND d.id = risk.id</div><div class="line">	INNER JOIN b</div><div class="line">	ON b.business_key = d.id</div><div class="line">		AND d.type = b.type</div><div class="line">	INNER JOIN r</div><div class="line">	ON risk.inst_id = r.inst_id</div><div class="line">		AND risk.id = r.id</div><div class="line">WHERE (r.visit_time &gt;= &apos;2018-10-27 00:00:00&apos;</div><div class="line">	AND r.visit_time &lt;= &apos;2018-11-28 15:54:40&apos;</div><div class="line">	AND d.id = &apos;22821111115042&apos;</div><div class="line">	AND b.business_key = concat(&apos;22821111115042&apos;, &apos;&apos;))</div><div class="line">GROUP BY d.col</div></pre></td></tr></table></figure></p>
+<p>其中，risk表大小112MB，d表大小为9.5GB，b表208KB，r表大小为4.2GB。这个报表的生成逻辑中含有较多inner join。经过一些列的索引优化之后，该条sql的查询时间是36s，前端体验仍然不是很好，且随着报表时间范围的拉长，用户数据量的增长，查询时间会持续恶化。<br>这里就不讨论更改表结构、迁移数据来优化查询了。</p>
+<h1 id="优化思路"><a href="#优化思路" class="headerlink" title="优化思路"></a>优化思路</h1><p>本身没有太多技术难度，但中间经过一段时间的摸索，直接说结论吧，希望对有需要的同学带来便利。<br>用SparkSQL分布式计算的能力来加速查询，SparkSQL原生支持通过jdbc连接外部存储。<br>首先，尝试了直接在sparksql的jdbc连接中执行上述sql，结果在意料之中，36秒左右。通过spark监控页面看到，该任务task数量为1，没有并发起来，SparkSQL将查询完全下推给mysql执行。<br>那么问题来了，如何提升并发度呢？<br>根据官方文档，使用jdbc连接有这么几个可用参数，这些参数的含义参考附录链接。<br><code>numPartitions</code>，<code>partitionColumn</code>，<code>lowerBound</code>，<code>upperBound</code><br>值得注意的是，<code>partitionColumn</code> 必须为数值类型，日期或者时间戳。<code>lowerBound</code>和<code>upperBound</code>必须为数字。在上面的case中，我们可以对r表的visit_time进行分区，并根据范围设置上下界线。（时间戳转化成long型）<br>分别在SparkSQL load这4张表，其中对r表的visit_time进行分区，并分别在SparkSQL中注册临时表，在SparkSQL内执行上述SQL，上述SQL执行时间由36s降低到12s，如果调调SparkSQL的参数，性能可能会更好。<br>这个方法从理论上来说，适用于任何单机关系型数据库。</p>
+<h1 id="原理简单剖析"><a href="#原理简单剖析" class="headerlink" title="原理简单剖析"></a>原理简单剖析</h1><p>这里是将SparkSQL作为一个分布式查询引擎，mysql作为SparkSQL的一种数据源。SparkSQL内部有高度的统一抽象(DataFrame/DataSet)。SparkSQL从mysql中抽取数据然后根据自身的逻辑来进行运算。如果对细节感兴趣可以参考链接2。</p>
+<h1 id="参考文档"><a href="#参考文档" class="headerlink" title="参考文档"></a>参考文档</h1><p>[1] <a href="http://spark.apache.org/docs/latest/sql-data-sources-jdbc.html" rel="external nofollow noopener noreferrer" target="_blank">http://spark.apache.org/docs/latest/sql-data-sources-jdbc.html</a><br>[2] <a href="http://spark.apache.org/docs/latest/sql-programming-guide.html" rel="external nofollow noopener noreferrer" target="_blank">http://spark.apache.org/docs/latest/sql-programming-guide.html</a></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h1 id=&quot;背景&quot;&gt;&lt;a href=&quot;#背景&quot; class=&quot;headerlink&quot; title=&quot;背景&quot;&gt;&lt;/a&gt;背景&lt;/h1&gt;&lt;p&gt;有一个系统的业务正在膨胀中，某一些报表（报表数据在mysql中）数据量增长比较厉害，报表页面已经处于&lt;code&gt;卡爆了&lt;/code&gt;的状态。中间经过mysql本身的优化，已经到了当前系统架构+存储模型的瓶颈。本文提供一种优化思路，抛砖引玉。&lt;br&gt;
+    
+    </summary>
+    
+      <category term="spark相关" scheme="http://chengqiangboy.github.io/categories/spark%E7%9B%B8%E5%85%B3/"/>
+    
+    
+      <category term="调优" scheme="http://chengqiangboy.github.io/tags/%E8%B0%83%E4%BC%98/"/>
+    
+      <category term="spark" scheme="http://chengqiangboy.github.io/tags/spark/"/>
+    
+  </entry>
+  
+  <entry>
     <title>让Spark MLlib的预测性能再飞一会儿</title>
     <link href="http://chengqiangboy.github.io/2018/05/02/%E8%AE%A9Spark-MLlib%E7%9A%84%E9%A2%84%E6%B5%8B%E6%80%A7%E8%83%BD%E5%86%8D%E9%A3%9E%E4%B8%80%E4%BC%9A%E5%84%BF/"/>
     <id>http://chengqiangboy.github.io/2018/05/02/让Spark-MLlib的预测性能再飞一会儿/</id>
     <published>2018-05-02T09:14:21.000Z</published>
-    <updated>2018-06-23T09:25:26.357Z</updated>
+    <updated>2018-06-23T09:30:57.483Z</updated>
     
     <content type="html"><![CDATA[<h1 id="背景介绍"><a href="#背景介绍" class="headerlink" title="背景介绍"></a>背景介绍</h1><p>我们的系统有一小部分机器学习模型识别需求，因为种种原因，最终选用了Spark MLlib来进行训练和预测。MLlib的Pipeline设计很好地契合了一个机器学习流水线，在模型训练和效果验证阶段，pipeline可以简化开发流程，然而在预测阶段，MLlib pipeline的表现有点差强人意。</p>
 <a id="more"></a>
@@ -64,7 +94,7 @@
     <link href="http://chengqiangboy.github.io/2017/09/25/god-s-probable-game/"/>
     <id>http://chengqiangboy.github.io/2017/09/25/god-s-probable-game/</id>
     <published>2017-09-25T03:13:49.000Z</published>
-    <updated>2018-01-02T06:26:52.033Z</updated>
+    <updated>2018-06-23T09:30:57.482Z</updated>
     
     <content type="html"><![CDATA[<p>概率是一个很有意思的东西，通过上帝投掷出来的骰子，你能猜到上帝的意图。<br>这是一篇白话瞎文，并不是特别严谨。<br><a id="more"></a></p>
 <h1 id="概率的两大学派"><a href="#概率的两大学派" class="headerlink" title="概率的两大学派"></a>概率的两大学派</h1><p>概率有两大学派：概率学派，贝叶斯学派。<br>“可悲”的是，国内的高等教育应该都是前者吧。之所以说“可悲”，是因为它固化了我们的思想，认为掷骰子的每一面，就是应该概率均等。当然，这个观点也是一己之见，欢迎来辩。</p>
@@ -90,7 +120,7 @@
     <link href="http://chengqiangboy.github.io/2017/09/15/word2vec-in-background/"/>
     <id>http://chengqiangboy.github.io/2017/09/15/word2vec-in-background/</id>
     <published>2017-09-15T09:19:26.000Z</published>
-    <updated>2018-01-02T06:26:52.034Z</updated>
+    <updated>2018-06-23T09:30:57.483Z</updated>
     
     <content type="html"><![CDATA[<h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><ol>
 <li>如果你想了解word2vec的原理，这篇文章并不适合你，出门右转用google。</li>
@@ -153,7 +183,7 @@
     <link href="http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/"/>
     <id>http://chengqiangboy.github.io/2016/11/11/a-dif-between-scala-and-java/</id>
     <published>2016-11-11T07:20:02.000Z</published>
-    <updated>2018-01-02T06:26:52.032Z</updated>
+    <updated>2018-06-23T09:30:57.481Z</updated>
     
     <content type="html"><![CDATA[<p>scala和java几乎没有区别，可以互相调用。注意这里说的是几乎，总有那么少数，出人意料的惊喜在告诉你，scala就是scala。<br><a id="more"></a></p>
 <h1 id="一个例子"><a href="#一个例子" class="headerlink" title="一个例子"></a>一个例子</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">import com.alibaba.fastjson.JSON</div><div class="line"></div><div class="line">object test &#123;</div><div class="line">  def main(args: Array[String]) = &#123;</div><div class="line">    val map = new util.HashMap[CharSequence, CharSequence]()</div><div class="line">    map.put(&quot;123&quot;, &quot;22333&quot;)</div><div class="line">    map.put(&quot;test&quot;, null)</div><div class="line">    val ret = JSON.toJSONString(map)</div><div class="line">    println(ret)</div><div class="line">   &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -199,7 +229,7 @@
     <link href="http://chengqiangboy.github.io/2016/10/31/graphx/"/>
     <id>http://chengqiangboy.github.io/2016/10/31/graphx/</id>
     <published>2016-10-31T15:34:52.000Z</published>
-    <updated>2018-01-02T06:26:52.033Z</updated>
+    <updated>2018-06-23T09:30:57.482Z</updated>
     
     <content type="html"><![CDATA[<p>Graphx的实现代码并不多，这得益于Spark RDD niubility的设计。众所周知，在分布式上做图计算需要考虑点、边的切割。而RDD本身是一个分布式的数据集，所以，做Graphx只需要把边和点用RDD表示出来就可以了。本文就是从这个角度来分析Graphx的运作基本原理（本文基于Spark2.0）。<br><a id="more"></a></p>
 <h1 id="分布式图的切割方式"><a href="#分布式图的切割方式" class="headerlink" title="分布式图的切割方式"></a>分布式图的切割方式</h1><p>在单机上图很好表示，在分布式环境下，就涉及到一个问题：图如何切分，以及切分之后的不同子图如何保持彼此的联系构成一个完整的图。图的切分方式有两种：点切分和边切分。在Graphx中，采用点切分。</p>
@@ -236,7 +266,7 @@
     <link href="http://chengqiangboy.github.io/2016/10/06/flume-introduce/"/>
     <id>http://chengqiangboy.github.io/2016/10/06/flume-introduce/</id>
     <published>2016-10-06T15:43:17.000Z</published>
-    <updated>2018-01-02T06:26:52.033Z</updated>
+    <updated>2018-06-23T09:30:57.482Z</updated>
     
     <content type="html"><![CDATA[<h1 id="声明"><a href="#声明" class="headerlink" title="声明"></a>声明</h1><p>我对Flume的研究并不深，这一篇文章来源于2016年3月的某一个下午对Flume的调研，仅有一个下午，所以可能有一些观点是不对的。另外，文章很多内容来源于一些大神的博文，当时匆匆没有记录引用来源。所以，如果有人可以发现本文的错误，以及引用的文章，还请在留言中指出。万分感谢。<br><a id="more"></a></p>
 <h1 id="Flume-OG"><a href="#Flume-OG" class="headerlink" title="Flume OG"></a>Flume OG</h1><p>Flume OG：Flume Original Generation，初代Flume。<br>由三种角色构成：代理点（agent）、收集节点（collector）、主节点（master）</p>
@@ -292,7 +322,7 @@
     <link href="http://chengqiangboy.github.io/2016/09/21/spark-off_heap/"/>
     <id>http://chengqiangboy.github.io/2016/09/21/spark-off_heap/</id>
     <published>2016-09-21T15:20:17.000Z</published>
-    <updated>2018-01-02T06:26:52.033Z</updated>
+    <updated>2018-06-23T09:30:57.482Z</updated>
     
     <content type="html"><![CDATA[<p>在文章的开头，安利一下我自己的github上的一个项目：<a href="https://github.com/chengqiangboy/spark-alluxio-blockstore" rel="external nofollow noopener noreferrer" target="_blank">AlluxioBlockManager</a>，同时还有我的github上的博客：<a href="https://github.com/chengqiangboy/blog" rel="external nofollow noopener noreferrer" target="_blank">blog</a><br>这个项目的作用是替代Spark2.0以前默认的<code>TachyonBlockManager</code>，稍后解释为什么要重新开发AlluxioBlockManager，以及Spark2.0的off_heap。<br><a id="more"></a></p>
 <h1 id="OFF-HEAP"><a href="#OFF-HEAP" class="headerlink" title="OFF_HEAP"></a>OFF_HEAP</h1><p>Spark中RDD提供了几种存储级别，不同的存储级别可以带来不同的容错性能，例如 <code>MEMORY_ONLY</code>,<code>MEMORY_ONLY_SER_2</code>…其中，有一种特别的是<code>OFF_HEAP</code><br><code>off_heap</code>的优势在于，在内存有限的条件下，减少不必要的内存消耗，以及频繁的GC问题，提升程序性能。<br>Spark2.0以前，默认的off_heap是Tachyon，当然，你可以通过继承<code>ExternalBlockManager</code> 来实现你自己想要的任何off_heap。<br>这里说Tachyon，是因为Spark默认的TachyonBlockManager开发完成之后，就再也没有更新过，以至于Tachyon升级为Alluxio之后移除不使用的API，导致Spark默认off_heap不可用，这个问题Spark社区和Alluxio社区都有反馈:<a href="https://alluxio.atlassian.net/browse/ALLUXIO-1881" rel="external nofollow noopener noreferrer" target="_blank">ALLUXIO-1881</a></p>
@@ -327,7 +357,7 @@
     <link href="http://chengqiangboy.github.io/2016/08/24/a-bug-in-streaming-app/"/>
     <id>http://chengqiangboy.github.io/2016/08/24/a-bug-in-streaming-app/</id>
     <published>2016-08-24T09:11:17.000Z</published>
-    <updated>2018-01-02T06:26:52.032Z</updated>
+    <updated>2018-06-23T09:30:57.481Z</updated>
     
     <content type="html"><![CDATA[<h1 id="题记："><a href="#题记：" class="headerlink" title="题记："></a>题记：</h1><p>这是我的第一篇技术博文，写得不好请多提意见。然后，感谢张志斌老师，毕业之前张老师帮助我解一些“神奇的bug”，现在毕业一个月，我终于自己开始解自己认为“神奇的bug”。<br><a id="more"></a></p>
 <h1 id="背景："><a href="#背景：" class="headerlink" title="背景："></a>背景：</h1><p>我需要在spark streaming上做一个窗口的统计功能，但是因为一些原因，不能利用window相关算子。于是，我在driver上保持了一个resultRDD，在DStream内不断地去更新这个resultRDD，包括新信息的统计，和过期信息的剔除。</p>
